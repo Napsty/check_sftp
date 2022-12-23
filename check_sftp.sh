@@ -24,9 +24,10 @@
 #                                                                              #
 # History/Changelog:                                                           #
 # 20221223 1.0.0: Public release                                               #
+# 20221223 1.0.1: Add private key authentication with passphrase (issue #1)    #
 ################################################################################
 #Variables and defaults
-version=1.0.0
+version=1.0.1
 STATE_OK=0              # define the exit code if status is OK
 STATE_WARNING=1         # define the exit code if status is Warning
 STATE_CRITICAL=2        # define the exit code if status is Critical
@@ -37,7 +38,7 @@ user=$USER
 directory=monitoring
 tmpdir=/tmp
 verbose=false
-sftpoptions=
+sftpoptions="-o StrictHostKeyChecking=no "
 ################################################################################
 #Functions
 help () {
@@ -51,8 +52,8 @@ Options:
       -P Port (default: 22)
       -u Username (default: \$USER from environment)
       -p Password
-      -i Identity file/Private Key for Key Authentication (example: -i '~/.ssh/id_rsa')
-      -o Additional SSH options (-o ...) to be added (example: -o '-o StrictHostKeyChecking=no')
+      -i Identity file/Private Key for Key Authentication (example: '~/.ssh/id_rsa')
+      -o Additional SSH options (-o ...) to be added (default: '-o StrictHostKeyChecking=no ')
       -d Remote directory to use for upload/download (default: monitoring)
       -t Local temp directory (default: /tmp)
       -v Verbose mode (shows sftp commands and output)
@@ -68,14 +69,14 @@ exit $STATE_UNKNOWN;
 if [ "${1}" = "--help" -o "${#}" = "0" ]; then help; exit $STATE_UNKNOWN; fi
 ################################################################################
 # Get user-given variables
-while getopts "H:P:u:p:i:o:d:vh" Input
+while getopts "H:P:u:p:i:o:d:t:vh" Input
 do
   case ${Input} in
   H)      host=${OPTARG};;
   P)      port=${OPTARG:=22};;
   u)      user=${OPTARG};;
-  p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e "; sftpoptions+="-o PubkeyAuthentication=no -o BatchMode=no ";;
-  i)      identityfile="-i ${OPTARG}";;
+  p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e ";;
+  i)      keyfile="${OPTARG}";;
   o)      sftpoptions+="${OPTARG} ";;
   d)      directory=${OPTARG:="monitoring"};;
   t)      tmpdir=${OPTARG:=/tmp};;
@@ -92,7 +93,8 @@ for cmd in sftp; do
   fi
 done
 
-if [[ -n ${usepass} ]]; then
+# When using password authentication, we need sshpass
+if [[ -n ${usepass} ]] && [[ -z ${keyfile} ]]; then
   if ! `which sshpass >/dev/null 2>&1`; then
     echo "CHECK_SFTP UNKNOWN: command 'sshpass' does not exist, please check if command exists and PATH is correct"
     exit ${STATE_UNKNOWN}
@@ -108,6 +110,32 @@ if [ "${verbose}" = true ]; then
   stdoutredir="/dev/stderr"
 else
   stdoutredir='/dev/null'
+fi
+
+# When using key authentication, add SSH key to ssh-agent
+if [[ -n "${keyfile}" ]]; then
+  if ! [[ -r "${keyfile}" ]]; then
+    echo "CHECK_SFTP CRITICAL: Cannot read private key file (${keyfile}). Check permissions."
+    exit ${STATE_CRITICAL}
+  fi
+  identityfile="-i ${keyfile}"
+  usepass=""
+  ssh-add -l 2>/dev/null
+  agentrc=$?
+  if [[ ${agentrc} -gt 0 ]]; then
+    eval "$(ssh-agent)" > /dev/null
+    trap 'ssh-agent -k > /dev/null' EXIT
+    echo "exec cat" > ${tmpdir}/check_sftp_ap.sh
+    chmod 755 ${tmpdir}/check_sftp_ap.sh
+    export DISPLAY=1
+    echo "${SSHPASS}" | SSH_ASKPASS=${tmpdir}/check_sftp_ap.sh ssh-add ${keyfile} >/dev/null 2>&1
+    rm -f ${tmpdir}/check_sftp_ap.sh
+  fi
+fi
+
+# When using password authentication, add special SSH options
+if [[ -n "${usepass}" ]] && [[ -z "${keyfile}" ]]; then
+  sftpoptions+="-o PubkeyAuthentication=no -o BatchMode=no "
 fi
 ################################################################################
 # Create a local file with current timestamp
@@ -153,6 +181,7 @@ fi
 ${usepass} sftp -P ${port} ${identityfile} ${sftpoptions} -b - ${user}@${host} <<EOF >${stdoutredir} 2>&1
 ${createdircmd}
 cd ${directory}
+lcd ${tmpdir}
 put ${tmpdir}/${file}
 get ${file}
 rm ${file}
