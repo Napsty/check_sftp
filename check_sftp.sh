@@ -75,9 +75,7 @@ do
   H)      host=${OPTARG};;
   P)      port=${OPTARG:=22};;
   u)      user=${OPTARG};;
-#  p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e "; sftpoptions+="-o PubkeyAuthentication=no -o BatchMode=no ";;
   p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e ";;
-  #i)      keyfile="${OPTARG}"; identityfile="-i ${OPTARG}";;
   i)      keyfile="${OPTARG}";;
   o)      sftpoptions+="${OPTARG} ";;
   d)      directory=${OPTARG:="monitoring"};;
@@ -95,7 +93,8 @@ for cmd in sftp; do
   fi
 done
 
-if [[ -n ${usepass} ]]; then
+# When using password authentication, we need sshpass
+if [[ -n ${usepass} ]] && [[ -z ${keyfile} ]]; then
   if ! `which sshpass >/dev/null 2>&1`; then
     echo "CHECK_SFTP UNKNOWN: command 'sshpass' does not exist, please check if command exists and PATH is correct"
     exit ${STATE_UNKNOWN}
