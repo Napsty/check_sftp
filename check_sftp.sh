@@ -52,8 +52,8 @@ Options:
       -P Port (default: 22)
       -u Username (default: \$USER from environment)
       -p Password
-      -i Identity file/Private Key for Key Authentication (example: -i '~/.ssh/id_rsa')
-      -o Additional SSH options (-o ...) to be added (example: -o '-o StrictHostKeyChecking=no')
+      -i Identity file/Private Key for Key Authentication (example: '~/.ssh/id_rsa')
+      -o Additional SSH options (-o ...) to be added (default: '-o StrictHostKeyChecking=no ')
       -d Remote directory to use for upload/download (default: monitoring)
       -t Local temp directory (default: /tmp)
       -v Verbose mode (shows sftp commands and output)
