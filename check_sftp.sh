@@ -115,6 +115,10 @@ fi
 
 # When using key authentication, add SSH key to ssh-agent
 if [[ -n "${keyfile}" ]]; then
+  if ! [[ -r "${keyfile}" ]]; then
+    echo "CHECK_SFTP CRITICAL: Cannot read private key file (${keyfile}). Check permissions."
+    exit ${STATE_CRITICAL}
+  fi
   identityfile="-i ${keyfile}"
   usepass=""
   ssh-add -l 2>/dev/null
