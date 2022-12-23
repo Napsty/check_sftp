@@ -125,7 +125,7 @@ if [[ -n "${keyfile}" ]]; then
     echo "exec cat" > ${tmpdir}/check_sftp_ap.sh
     chmod 755 ${tmpdir}/check_sftp_ap.sh
     export DISPLAY=1
-    echo "${SSHPASS}" | SSH_ASKPASS=${tmpdir}/ap-cat.sh ssh-add ${keyfile} >/dev/null 2>&1
+    echo "${SSHPASS}" | SSH_ASKPASS=${tmpdir}/check_sftp_ap.sh ssh-add ${keyfile} >/dev/null 2>&1
     rm -f ${tmpdir}/check_sftp_ap.sh
   fi
 fi
