@@ -69,7 +69,7 @@ exit $STATE_UNKNOWN;
 if [ "${1}" = "--help" -o "${#}" = "0" ]; then help; exit $STATE_UNKNOWN; fi
 ################################################################################
 # Get user-given variables
-while getopts "H:P:u:p:i:o:d:vh" Input
+while getopts "H:P:u:p:i:o:d:t:vh" Input
 do
   case ${Input} in
   H)      host=${OPTARG};;
