@@ -24,9 +24,10 @@
 #                                                                              #
 # History/Changelog:                                                           #
 # 20221223 1.0.0: Public release                                               #
+# 20221223 1.0.1: Add private key authentication with passphrase (issue #1)    #
 ################################################################################
 #Variables and defaults
-version=1.0.0
+version=1.0.1
 STATE_OK=0              # define the exit code if status is OK
 STATE_WARNING=1         # define the exit code if status is Warning
 STATE_CRITICAL=2        # define the exit code if status is Critical
@@ -37,7 +38,7 @@ user=$USER
 directory=monitoring
 tmpdir=/tmp
 verbose=false
-sftpoptions=
+sftpoptions="-o StrictHostKeyChecking=no "
 ################################################################################
 #Functions
 help () {
@@ -74,8 +75,10 @@ do
   H)      host=${OPTARG};;
   P)      port=${OPTARG:=22};;
   u)      user=${OPTARG};;
-  p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e "; sftpoptions+="-o PubkeyAuthentication=no -o BatchMode=no ";;
-  i)      identityfile="-i ${OPTARG}";;
+#  p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e "; sftpoptions+="-o PubkeyAuthentication=no -o BatchMode=no ";;
+  p)      export SSHPASS="${OPTARG}"; usepass="sshpass -e ";;
+  #i)      keyfile="${OPTARG}"; identityfile="-i ${OPTARG}";;
+  i)      keyfile="${OPTARG}";;
   o)      sftpoptions+="${OPTARG} ";;
   d)      directory=${OPTARG:="monitoring"};;
   t)      tmpdir=${OPTARG:=/tmp};;
@@ -108,6 +111,28 @@ if [ "${verbose}" = true ]; then
   stdoutredir="/dev/stderr"
 else
   stdoutredir='/dev/null'
+fi
+
+# When using key authentication, add SSH key to ssh-agent
+if [[ -n "${keyfile}" ]]; then
+  identityfile="-i ${keyfile}"
+  usepass=""
+  ssh-add -l 2>/dev/null
+  agentrc=$?
+  if [[ ${agentrc} -gt 0 ]]; then
+    eval "$(ssh-agent)" > /dev/null
+    trap 'ssh-agent -k > /dev/null' EXIT
+    echo "exec cat" > ${tmpdir}/check_sftp_ap.sh
+    chmod 755 ${tmpdir}/check_sftp_ap.sh
+    export DISPLAY=1
+    echo "${SSHPASS}" | SSH_ASKPASS=${tmpdir}/ap-cat.sh ssh-add ${keyfile} >/dev/null 2>&1
+    rm -f ${tmpdir}/check_sftp_ap.sh
+  fi
+fi
+
+# When using password authentication, add special SSH options
+if [[ -n "${usepass}" ]] && [[ -z "${keyfile}" ]]; then
+  sftpoptions+="-o PubkeyAuthentication=no -o BatchMode=no "
 fi
 ################################################################################
 # Create a local file with current timestamp
@@ -153,6 +178,7 @@ fi
 ${usepass} sftp -P ${port} ${identityfile} ${sftpoptions} -b - ${user}@${host} <<EOF >${stdoutredir} 2>&1
 ${createdircmd}
 cd ${directory}
+lcd ${tmpdir}
 put ${tmpdir}/${file}
 get ${file}
 rm ${file}
