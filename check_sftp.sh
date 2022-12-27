@@ -25,9 +25,10 @@
 # History/Changelog:                                                           #
 # 20221223 1.0.0: Public release                                               #
 # 20221223 1.0.1: Add private key authentication with passphrase (issue #1)    #
+# 20221227 1.0.2: Adjust help, add key auth commands requirement, debug clean  #
 ################################################################################
 #Variables and defaults
-version=1.0.1
+version=1.0.2
 STATE_OK=0              # define the exit code if status is OK
 STATE_WARNING=1         # define the exit code if status is Warning
 STATE_CRITICAL=2        # define the exit code if status is Critical
@@ -51,7 +52,7 @@ Options:
    *  -H Hostname or ip address of SFTP Server
       -P Port (default: 22)
       -u Username (default: \$USER from environment)
-      -p Password
+      -p Password or passphrase of private key when used in combination with -i
       -i Identity file/Private Key for Key Authentication (example: '~/.ssh/id_rsa')
       -o Additional SSH options (-o ...) to be added (default: '-o StrictHostKeyChecking=no ')
       -d Remote directory to use for upload/download (default: monitoring)
@@ -114,13 +115,18 @@ fi
 
 # When using key authentication, add SSH key to ssh-agent
 if [[ -n "${keyfile}" ]]; then
+  for cmd in ssh-agent ssh-add; do
+    if ! `which ${cmd} >/dev/null 2>&1`; then
+      echo "CHECK_SFTP UNKNOWN: ${cmd} does not exist, please check if command exists and PATH is correct"
+      exit ${STATE_UNKNOWN}
+    fi
+  done
   if ! [[ -r "${keyfile}" ]]; then
     echo "CHECK_SFTP CRITICAL: Cannot read private key file (${keyfile}). Check permissions."
     exit ${STATE_CRITICAL}
   fi
   identityfile="-i ${keyfile}"
   usepass=""
-  ssh-add -l 2>/dev/null
   agentrc=$?
   if [[ ${agentrc} -gt 0 ]]; then
     eval "$(ssh-agent)" > /dev/null
